@@ -11,14 +11,14 @@ class Serial
 {
 public:
     typedef std::vector<unsigned char> packet;
+    static const int bitrate = 1000;
     
     const int pin_scl, pin_sda;
-    const int bitrate;
     
     /**
-     * Constructor, specifying the SCL and SDA pins, and target bitrate.
+     * Constructor, specifying the SCL and SDA pins.
      */
-    Serial(int pin_scl, int pin_sda, int bitrate = 10000);
+    Serial(int pin_scl, int pin_sda);
     
     /**
      * Calls the `stop` function and then cleans up the instance.
@@ -75,15 +75,15 @@ private:
     
     enum { IDLE, TX, RX } state = IDLE;
     
-    static void pin_thread_process(Serial &serial);
+    void pin_thread_process();
     
-    static void isr_scl_rise(Serial &serial);
-    static void isr_scl_fall(Serial &serial);
-    static void isr_sda_rise(Serial &serial);
-    static void isr_sda_fall(Serial &serial);
+    void isr_scl_rise();
+    void isr_scl_fall();
+    void isr_sda_rise();
+    void isr_sda_fall();
     
-    static void trigger_tx(Serial &serial);
-    static void clock_pulse(Serial &serial);
+    void trigger_tx();
+    void clock_pulse();
 };
 
 #endif /* SERIAL_HPP */
