@@ -1,14 +1,48 @@
 #include "serial.hpp"
+#include <wiringPi.h>
+#include <iostream>
+#include <unistd.h>
+#include <string>
+
+std::string convert_packet(Serial::packet p)
+{
+    std::string str = "";
+    
+    for (unsigned char c : p)
+    {
+        str += std::to_string((unsigned int) c) + " ";
+    }
+    return str;
+}
 
 int main()
 {
-    Serial serial(3, 21, 1000);
+    wiringPiSetup();
     
-    Serial::packet p;
-    p.push_back(10);
-    p.push_back(53);
-    p.push_back(125);
-    serial.write(p);
+    // Pins 2 and 4, and 3 and 5 should be connected together.
+    Serial serialA(2, 3, 1000);
+    Serial serialB(4, 5, 1000);
+    
+    Serial::packet p1;
+    p1.push_back(115);
+    p1.push_back(53);
+    p1.push_back(125);
+    serialA.write(p1);
+    
+    Serial::packet p2;
+    p2.push_back(115);
+    p2.push_back(40);
+    p2.push_back(84);
+    serialB.write(p2);
+    
+    while (true)
+    {
+        if (serialA.available())
+            std::cout << "RX (A): " << convert_packet(serialA.read()) << std::endl;
+        
+        if (serialB.available())
+            std::cout << "RX (B): " << convert_packet(serialB.read()) << std::endl;
+    }
     
     return 0;
 }

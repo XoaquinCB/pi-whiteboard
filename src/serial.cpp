@@ -7,21 +7,35 @@
 #include <chrono>
 #include <future>
 
-#define SET_PIN_LEVEL(pin, level) pinMode(pin, level ? INPUT : OUTPUT)
+#define SET_PIN_LEVEL(pin, level) if (level) { pullUpDnControl(pin, PUD_UP); pinMode(pin, INPUT); } else { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }
 #define GET_PIN_LEVEL(pin)        digitalRead(pin)
 
 Serial::Serial(int pin_scl, int pin_sda, int bitrate) : pin_scl(pin_scl), pin_sda(pin_sda), bitrate(bitrate)
 {
-    pin_thread = new std::thread(pin_thread_process, this);
+    mtx.lock();
+    thread_count++;
+    mtx.unlock();
+    
+    std::thread thr([this]{ pin_thread_process(*this); });
+    thr.detach();
 }
 
 Serial::~Serial()
 {
+    stop();
+}
+
+Serial::packet Serial::read()
+{
+    packet p(0);
     mtx.lock();
-    finish = true;
+    if (rx_buffer.size())
+    {
+        p = rx_buffer.front();
+        rx_buffer.pop();
+    }
     mtx.unlock();
-    pin_thread->join();
-    delete pin_thread;
+    return p;
 }
 
 bool Serial::write(packet bytes)
@@ -30,27 +44,14 @@ bool Serial::write(packet bytes)
     {
         mtx.lock();
         tx_buffer.push(bytes);
-        mtx.unlock();
         trigger_tx(*this);
+        mtx.unlock();
         return true;
     }
     else
     {
         return false;
     }
-}
-
-Serial::packet Serial::read()
-{
-    packet p(0);
-    mtx.lock();
-    if (available())
-    {
-        p = rx_buffer.front();
-        rx_buffer.pop();
-    }
-    mtx.unlock();
-    return p;
 }
 
 std::size_t Serial::available()
@@ -61,38 +62,75 @@ std::size_t Serial::available()
     return size;
 }
 
-void Serial::pin_thread_process(Serial *serial)
+std::size_t Serial::remaining()
 {
-	pullUpDnControl(serial->pin_sda, PUD_UP);
-    pinMode(serial->pin_sda, INPUT);
-    digitalWrite(serial->pin_sda, LOW);
+    mtx.lock();
+    std::size_t size = tx_buffer.size();
+    mtx.unlock();
+    return size;
+}
+
+void Serial::stop()
+{
+    mtx.lock();
     
-	pullUpDnControl(serial->pin_scl, PUD_UP);
-    pinMode(serial->pin_scl, INPUT);
-    digitalWrite(serial->pin_scl, LOW);
+    // Set flag to tell threads to finish:
+    finish = true;
     
-    bool last_state_sda = GET_PIN_LEVEL(serial->pin_sda);
-    bool last_state_scl = GET_PIN_LEVEL(serial->pin_scl);
+    // Wait for all threads to finish (count == 0):
+    stop_condition.wait(mtx, [this]{ return thread_count == 0; });
     
-    while (!serial->finish || serial->state != IDLE)
+    is_stopped = true;
+    mtx.unlock();
+}
+
+bool Serial::stopped()
+{
+    mtx.lock();
+    bool stopped = is_stopped;
+    mtx.unlock();
+    
+    return stopped;
+}
+
+void Serial::pin_thread_process(Serial &serial)
+{
+    serial.mtx.lock();
+    
+    SET_PIN_LEVEL(serial.pin_sda, 1);
+    SET_PIN_LEVEL(serial.pin_scl, 1);
+    
+    bool last_state_sda = GET_PIN_LEVEL(serial.pin_sda);
+    bool last_state_scl = GET_PIN_LEVEL(serial.pin_scl);
+    
+    serial.mtx.unlock();
+    
+    while (true)
     {
-        bool curr_state_sda = GET_PIN_LEVEL(serial->pin_sda);
-        bool curr_state_scl = GET_PIN_LEVEL(serial->pin_scl);
+        serial.mtx.lock();
         
-        serial->mtx.lock();
+        if (serial.finish && serial.state == IDLE)
+            break;
         
-        if (!last_state_sda && curr_state_sda) isr_sda_rise(*serial);
-        if (last_state_sda && !curr_state_sda) isr_sda_fall(*serial);
-        if (!last_state_scl && curr_state_scl) isr_scl_rise(*serial);
-        if (last_state_scl && !curr_state_scl) isr_scl_fall(*serial);
+        bool curr_state_sda = GET_PIN_LEVEL(serial.pin_sda);
+        bool curr_state_scl = GET_PIN_LEVEL(serial.pin_scl);
         
-        serial->mtx.unlock();
+        if (!last_state_sda && curr_state_sda) isr_sda_rise(serial);
+        if (last_state_sda && !curr_state_sda) isr_sda_fall(serial);
+        if (!last_state_scl && curr_state_scl) isr_scl_rise(serial);
+        if (last_state_scl && !curr_state_scl) isr_scl_fall(serial);
+        
+        serial.mtx.unlock();
         
         last_state_sda = curr_state_sda;
         last_state_scl = curr_state_scl;
         
         usleep(10);
     }
+    
+    serial.thread_count--;
+    serial.mtx.unlock();
+    serial.stop_condition.notify_all();
 }
 
 void Serial::isr_scl_rise(Serial &serial)
@@ -102,7 +140,7 @@ void Serial::isr_scl_rise(Serial &serial)
     if (serial.state == TX)
     {
         // Check if last byte has been transmitted:
-        if (serial.byte_pos == serial.tx_buffer.front().size())
+        if (serial.byte_pos > serial.tx_buffer.front().size())
         {
             // If so, generate a stop condition and return:
             SET_PIN_LEVEL(serial.pin_sda, 1);
@@ -117,6 +155,7 @@ void Serial::isr_scl_rise(Serial &serial)
         }
         else
         {
+            // If so, generate the next clock pulse:
             clock_pulse(serial);
         }
     }
@@ -152,7 +191,7 @@ void Serial::isr_scl_fall(Serial &serial)
         
         if (serial.byte_pos == 0)
             tx_byte = tx_packet.size(); // first byte is the length byte.
-        else if (serial.byte_pos == tx_packet.size())
+        else if (serial.byte_pos > tx_packet.size())
             tx_byte = 0; // after last byte, set up the stop bit by setting SDA low
         else
             tx_byte = tx_packet.at(serial.byte_pos - 1); // else get the data byte
@@ -188,48 +227,71 @@ void Serial::isr_sda_fall(Serial &serial)
         serial.bit_pos = 0;
         serial.rx_byte = 0;
         serial.byte_pos = 0;
-        serial.rx_packet.clear();
+        serial.rx_packet = packet();
         
         if (serial.state == IDLE)
+        {
             serial.state = RX;
+        }
     }
 }
 
+// Asynchronously waits for half a clock cycle and then starts a new transmission if it can.
 void Serial::trigger_tx(Serial &serial)
 {
-    serial.mtx.lock();
+    if (serial.is_stopped)
+        return;
     
-    // Check if there's a packet to transmit:
-    if (serial.tx_buffer.size() > 0 && !serial.finish)
-    {
-        // After a delay, if the state is IDLE start a new transmission:
-        std::async(std::launch::async, [&serial] () {
-            // Delay for half a clock cycle:
-            std::this_thread::sleep_for(std::chrono::microseconds(1000000 / serial.bitrate / 2));
-            
-            serial.mtx.lock();
+    serial.thread_count++;
+    
+    std::thread thr([&serial] () {
+        // Delay for half a clock cycle:
+        usleep(1000000 / serial.bitrate / 2);
         
-            if (serial.state == IDLE)
+        serial.mtx.lock();
+        
+        // Check the finish flag and that the state is IDLE:
+        if (!serial.finish && serial.state == IDLE)
+        {
+            // If there's a packet to transmit, start a new transmission:
+            if (serial.tx_buffer.size())
             {
                 SET_PIN_LEVEL(serial.pin_sda, 0); // start condition
                 serial.state = TX;
                 clock_pulse(serial);
             }
+        }
         
-            serial.mtx.unlock();
-        } );
-    }
+        serial.thread_count--;
+        serial.mtx.unlock();
+        serial.stop_condition.notify_all();
+    });
     
-    serial.mtx.unlock();
+    thr.detach();
 }
 
+// Asynchronously generates a single clock pulse: SCL low and then high.
 void Serial::clock_pulse(Serial &serial)
 {
+    serial.thread_count++;
+    
     // Set SCL low and then high with the appropriate delays, in a separate thread:
-    std::async(std::launch::async, [&serial] () {
-        std::this_thread::sleep_for(std::chrono::microseconds(1000000 / serial.bitrate / 2));
+    std::thread thr([&serial] () {
+        usleep(1000000 / serial.bitrate / 2);
+        
+        serial.mtx.lock();
         SET_PIN_LEVEL(serial.pin_scl, 0);
-        std::this_thread::sleep_for(std::chrono::microseconds(1000000 / serial.bitrate / 2));
+        serial.mtx.unlock();
+        
+        usleep(1000000 / serial.bitrate / 2);
+        
+        serial.mtx.lock();
         SET_PIN_LEVEL(serial.pin_scl, 1);
+        
+        serial.thread_count--;
+        serial.mtx.unlock();
+        serial.stop_condition.notify_all();
     });
+    
+    thr.detach();
 }

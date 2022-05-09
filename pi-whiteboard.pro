@@ -4,7 +4,7 @@ MOC_DIR = build/.moc
 RCC_DIR = build/.rcc
 UI_DIR = build/.ui
 
-QMAKE_CXXFLAGS += -lwiringPi
+LIBS += -lwiringPi -pthread
 
 HEADERS = src/*.hpp
 SOURCES = src/*.cpp
