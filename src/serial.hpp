@@ -63,10 +63,11 @@ public:
     std::size_t remaining();
     
     /**
-     * Blocks until data is available in the receive buffer, or until the timeout.
-     * Use a negative timeout if you want to wait indefinitely.
+     * Blocks until data is available in the receive buffer, or until the timeout,
+     * and returns the number of packets available.
+     * Use a negative timeout to wait indefinitely.
      */
-    bool wait_available(long timeout_micros = -1);
+    std::size_t wait_available(long timeout_micros = -1);
     
     /**
      * Blocks until any ongoing transmission is finished and then stops any further transmissions or receptions.

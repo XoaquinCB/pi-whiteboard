@@ -73,12 +73,12 @@ std::size_t Serial::remaining()
     return tx_buffer.size();
 }
 
-bool Serial::wait_available(long timeout_micros)
+std::size_t Serial::wait_available(long timeout_micros)
 {
     std::lock_guard<std::mutex> lock(mtx);
     
     if (rx_buffer.size() != 0)
-        return true;
+        return rx_buffer.size();
     
     // Wait for packet to be received:
     if (timeout_micros >= 0)
@@ -86,7 +86,7 @@ bool Serial::wait_available(long timeout_micros)
     else
         available_condition.wait(mtx);
     
-    return rx_buffer.size() != 0;
+    return rx_buffer.size();
 }
 
 void Serial::stop()
