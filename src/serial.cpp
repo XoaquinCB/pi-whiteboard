@@ -7,19 +7,14 @@
 #include <chrono>
 #include <future>
 
-#define SET_PIN_LEVEL(pin, level) if (level) { pullUpDnControl(pin, PUD_UP); pinMode(pin, INPUT); } else { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }
+#define SET_PIN_LEVEL(pin, level)   if (level) { pullUpDnControl(pin, PUD_UP); pinMode(pin, INPUT); } \
+                                    else       { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }
 #define GET_PIN_LEVEL(pin)        digitalRead(pin)
 
 Serial::Serial(int pin_scl, int pin_sda) : pin_scl(pin_scl), pin_sda(pin_sda)
 {
     wiringPiSetup();
-    
-    mtx.lock();
-    thread_count++;
-    mtx.unlock();
-    
-    std::thread thr([this]{ pin_thread_process(); });
-    thr.detach();
+    pin_thread();
 }
 
 Serial::~Serial()
@@ -52,6 +47,7 @@ Serial::packet Serial::peek()
 
 bool Serial::write(packet bytes)
 {
+    // Check that the packet size is valid:
     if (0 < bytes.size() && bytes.size() <= 256)
     {
         std::lock_guard<std::mutex> lock(mtx);
@@ -84,6 +80,7 @@ bool Serial::wait_available(long timeout_micros)
     if (rx_buffer.size() != 0)
         return true;
     
+    // Wait for packet to be received:
     if (timeout_micros >= 0)
         available_condition.wait_for(mtx, std::chrono::microseconds(timeout_micros));
     else
@@ -111,48 +108,56 @@ bool Serial::stopped()
     return is_stopped;
 }
 
-void Serial::pin_thread_process()
+void Serial::pin_thread()
 {
-    // Set this thread to "realtime" high priority:
-    struct sched_param param { .sched_priority = 55 };
-    sched_setscheduler(0, SCHED_RR, &param);
-    
     mtx.lock();
-    
-    SET_PIN_LEVEL(pin_sda, 1);
-    SET_PIN_LEVEL(pin_scl, 1);
-    
-    bool last_state_sda = GET_PIN_LEVEL(pin_sda);
-    bool last_state_scl = GET_PIN_LEVEL(pin_scl);
-    
+    thread_count++;
     mtx.unlock();
     
-    while (true)
-    {
+    std::thread thr([this] () {
+        // Set this thread to "realtime" high priority:
+        struct sched_param param { .sched_priority = 55 };
+        sched_setscheduler(0, SCHED_RR, &param);
+        
         mtx.lock();
         
-        if (finish && state == IDLE)
-            break;
+        SET_PIN_LEVEL(pin_sda, 1);
+        SET_PIN_LEVEL(pin_scl, 1);
         
-        bool curr_state_sda = GET_PIN_LEVEL(pin_sda);
-        bool curr_state_scl = GET_PIN_LEVEL(pin_scl);
-        
-        if (!last_state_sda && curr_state_sda) isr_sda_rise();
-        if (last_state_sda && !curr_state_sda) isr_sda_fall();
-        if (!last_state_scl && curr_state_scl) isr_scl_rise();
-        if (last_state_scl && !curr_state_scl) isr_scl_fall();
+        bool last_state_sda = GET_PIN_LEVEL(pin_sda);
+        bool last_state_scl = GET_PIN_LEVEL(pin_scl);
         
         mtx.unlock();
         
-        last_state_sda = curr_state_sda;
-        last_state_scl = curr_state_scl;
+        while (true)
+        {
+            mtx.lock();
+            
+            if (finish && state == IDLE)
+                break;
+            
+            bool curr_state_sda = GET_PIN_LEVEL(pin_sda);
+            bool curr_state_scl = GET_PIN_LEVEL(pin_scl);
+            
+            if (!last_state_sda && curr_state_sda) isr_sda_rise();
+            if (last_state_sda && !curr_state_sda) isr_sda_fall();
+            if (!last_state_scl && curr_state_scl) isr_scl_rise();
+            if (last_state_scl && !curr_state_scl) isr_scl_fall();
+            
+            mtx.unlock();
+            
+            last_state_sda = curr_state_sda;
+            last_state_scl = curr_state_scl;
+            
+            usleep(1000000 / Serial::bitrate / 8);
+        }
         
-        usleep(1000000 / Serial::bitrate / 8);
-    }
+        thread_count--;
+        stop_condition.notify_all();
+        mtx.unlock();
+    });
     
-    thread_count--;
-    mtx.unlock();
-    stop_condition.notify_all();
+    thr.detach();
 }
 
 void Serial::isr_scl_rise()
@@ -290,8 +295,8 @@ void Serial::trigger_tx()
         }
         
         thread_count--;
-        mtx.unlock();
         stop_condition.notify_all();
+        mtx.unlock();
     });
     
     thr.detach();
@@ -316,8 +321,8 @@ void Serial::clock_pulse()
         SET_PIN_LEVEL(pin_scl, 1);
         
         thread_count--;
-        mtx.unlock();
         stop_condition.notify_all();
+        mtx.unlock();
     });
     
     thr.detach();

@@ -9,9 +9,8 @@ std::string convert_packet(Serial::packet p)
     std::string str = "";
     
     for (unsigned char c : p)
-    {
         str += std::to_string((unsigned int) c) + " ";
-    }
+    
     return str;
 }
 
@@ -34,14 +33,10 @@ int main()
     serialB.write(p2);
     
     if (serialA.wait_available())
-    {
          std::cout << "RX (A): " << convert_packet(serialA.read()) << std::endl;
-    }
     
     if (serialB.wait_available())
-    {
          std::cout << "RX (B): " << convert_packet(serialB.read()) << std::endl;
-    }
     
     return 0;
 }

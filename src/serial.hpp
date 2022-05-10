@@ -10,9 +10,19 @@
 class Serial
 {
 public:
+    /**
+     * Datatype representing a packet of data as a list of bytes.
+     */
     typedef std::vector<unsigned char> packet;
+    
+    /**
+     * Target bitrate in Hz.
+     */
     static const int bitrate = 1000;
     
+    /**
+     * SCL (clock) and SDA (data) pins.
+     */
     const int pin_scl, pin_sda;
     
     /**
@@ -70,30 +80,40 @@ public:
     bool stopped();
     
 private:
+    // Any access to variables in this class should lock this mutex.
     std::mutex mtx;
-    std::condition_variable_any stop_condition;
-    std::condition_variable_any available_condition;
     
+    // Variables for assisting with stopping the instance.
     bool finish = false;
     bool is_stopped = false;
     unsigned int thread_count = 0;
+    std::condition_variable_any stop_condition;
     
+    // Transmit and receive buffers.
     std::queue<packet> tx_buffer, rx_buffer;
     
+    // Variables for keeping track of a transmission/reception.
     unsigned int byte_pos, bit_pos;
     bool tx_bit_val;
     unsigned char rx_byte;
     packet rx_packet;
     
+    std::condition_variable_any available_condition;
+    
     enum { IDLE, TX, RX } state = IDLE;
     
-    void pin_thread_process();
+    // Starts a thread in charge of checking the pin values and dispatching the pin change interrupts.
+    void pin_thread();
     
+    // Iterrupt routines for pin changes.
+    // 'mtx' must be locked before calling any of these.
     void isr_scl_rise();
     void isr_scl_fall();
     void isr_sda_rise();
     void isr_sda_fall();
     
+    // Methods for triggering a transmission, and for generating a clock pulse.
+    // 'mtx' must be locked before calling either of these.
     void trigger_tx();
     void clock_pulse();
 };
