@@ -3,9 +3,7 @@
 #include <wiringPi.h>
 #include <unistd.h>
 #include <thread>
-#include <cmath>
 #include <chrono>
-#include <future>
 
 #define SET_PIN_LEVEL(pin, level)   if (level) { pullUpDnControl(pin, PUD_UP); pinMode(pin, INPUT); } \
                                     else       { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }
