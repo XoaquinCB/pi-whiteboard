@@ -12,6 +12,8 @@
 
 Serial::Serial(int pin_scl, int pin_sda) : pin_scl(pin_scl), pin_sda(pin_sda)
 {
+    wiringPiSetup();
+    
     mtx.lock();
     thread_count++;
     mtx.unlock();

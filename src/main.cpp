@@ -17,8 +17,6 @@ std::string convert_packet(Serial::packet p)
 
 int main()
 {
-    wiringPiSetup();
-    
     // Pins 2 and 4, and 3 and 5 should be connected together.
     Serial serialA(2, 3);
     Serial serialB(4, 5);
