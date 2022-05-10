@@ -30,13 +30,23 @@ Serial::~Serial()
 Serial::packet Serial::read()
 {
     packet p(0);
-    mtx.lock();
+    std::lock_guard<std::mutex> lock(mtx);
     if (rx_buffer.size())
     {
         p = rx_buffer.front();
         rx_buffer.pop();
     }
-    mtx.unlock();
+    return p;
+}
+
+Serial::packet Serial::peek()
+{
+    packet p(0);
+    std::lock_guard<std::mutex> lock(mtx);
+    if (rx_buffer.size())
+    {
+        p = rx_buffer.front();
+    }
     return p;
 }
 
@@ -44,10 +54,9 @@ bool Serial::write(packet bytes)
 {
     if (0 < bytes.size() && bytes.size() <= 256)
     {
-        mtx.lock();
+        std::lock_guard<std::mutex> lock(mtx);
         tx_buffer.push(bytes);
         trigger_tx();
-        mtx.unlock();
         return true;
     }
     else
@@ -58,23 +67,34 @@ bool Serial::write(packet bytes)
 
 std::size_t Serial::available()
 {
-    mtx.lock();
-    std::size_t size = rx_buffer.size();
-    mtx.unlock();
-    return size;
+    std::lock_guard<std::mutex> lock(mtx);
+    return rx_buffer.size();
 }
 
 std::size_t Serial::remaining()
 {
-    mtx.lock();
-    std::size_t size = tx_buffer.size();
-    mtx.unlock();
-    return size;
+    std::lock_guard<std::mutex> lock(mtx);
+    return tx_buffer.size();
+}
+
+bool Serial::wait_available(long timeout_micros)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    
+    if (rx_buffer.size() != 0)
+        return true;
+    
+    if (timeout_micros >= 0)
+        available_condition.wait_for(mtx, std::chrono::microseconds(timeout_micros));
+    else
+        available_condition.wait(mtx);
+    
+    return rx_buffer.size() != 0;
 }
 
 void Serial::stop()
 {
-    mtx.lock();
+    std::lock_guard<std::mutex> lock(mtx);
     
     // Set flag to tell threads to finish:
     finish = true;
@@ -83,16 +103,12 @@ void Serial::stop()
     stop_condition.wait(mtx, [this]{ return thread_count == 0; });
     
     is_stopped = true;
-    mtx.unlock();
 }
 
 bool Serial::stopped()
 {
-    mtx.lock();
-    bool stopped = is_stopped;
-    mtx.unlock();
-    
-    return stopped;
+    std::lock_guard<std::mutex> lock(mtx);
+    return is_stopped;
 }
 
 void Serial::pin_thread_process()
@@ -214,9 +230,14 @@ void Serial::isr_sda_rise()
     if (GET_PIN_LEVEL(pin_scl))
     {
         if (state == RX)
+        {
             rx_buffer.push(rx_packet);
+            available_condition.notify_all();
+        }
         else if (state == TX)
+        {
             tx_buffer.pop();
+        }
         
         state = IDLE;
         

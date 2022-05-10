@@ -32,6 +32,11 @@ public:
     packet read();
     
     /**
+     * Same as 'read' but doesn't remove the packet from the buffer.
+     */
+    packet peek();
+    
+    /**
      * Checks if a packet is valid and puts it on the transmit buffer if it is.
      * Returns whether the packet is valid.
      */
@@ -48,6 +53,12 @@ public:
     std::size_t remaining();
     
     /**
+     * Blocks until data is available in the receive buffer, or until the timeout.
+     * Use a negative timeout if you want to wait indefinitely.
+     */
+    bool wait_available(long timeout_micros = -1);
+    
+    /**
      * Blocks until any ongoing transmission is finished and then stops any further transmissions or receptions.
      * Can safely be called multiple times. Note that once stopped, the instance cannot be restarted.
      */
@@ -61,6 +72,7 @@ public:
 private:
     std::mutex mtx;
     std::condition_variable_any stop_condition;
+    std::condition_variable_any available_condition;
     
     bool finish = false;
     bool is_stopped = false;

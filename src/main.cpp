@@ -33,13 +33,14 @@ int main()
     p2.push_back(84);
     serialB.write(p2);
     
-    while (true)
+    if (serialA.wait_available())
     {
-        if (serialA.available())
-            std::cout << "RX (A): " << convert_packet(serialA.read()) << std::endl;
-        
-        if (serialB.available())
-            std::cout << "RX (B): " << convert_packet(serialB.read()) << std::endl;
+         std::cout << "RX (A): " << convert_packet(serialA.read()) << std::endl;
+    }
+    
+    if (serialB.wait_available())
+    {
+         std::cout << "RX (B): " << convert_packet(serialB.read()) << std::endl;
     }
     
     return 0;
