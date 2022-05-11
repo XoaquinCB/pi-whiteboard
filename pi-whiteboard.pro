@@ -6,7 +6,7 @@ UI_DIR = build/.ui
 
 LIBS += -lwiringPi -pthread
 
-HEADERS = src/*.hpp
+HEADERS = src/*.hpp src/*.h
 SOURCES = src/*.cpp
 
 QT = widgets
