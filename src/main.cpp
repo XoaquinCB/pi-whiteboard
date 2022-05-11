@@ -1,8 +1,12 @@
 #include "serial.hpp"
+#include "serial_test.hpp"
 #include <wiringPi.h>
 #include <iostream>
 #include <unistd.h>
 #include <string>
+
+#include <QObject>
+#include <QCoreApplication>
 
 std::string convert_packet(Serial::packet p)
 {
@@ -14,11 +18,17 @@ std::string convert_packet(Serial::packet p)
     return str;
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    QCoreApplication app(argc, argv);
+    SerialTest test;
+    
     // Pins 2 and 4, and 3 and 5 should be connected together.
     Serial serialA(2, 3);
     Serial serialB(4, 5);
+    
+    QObject::connect(&serialA, &Serial::packet_received, &test, &SerialTest::packet_received);
+    QObject::connect(&serialB, &Serial::packet_received, &test, &SerialTest::packet_received);
     
     Serial::packet p1;
     p1.push_back(115);
@@ -32,11 +42,5 @@ int main()
     p2.push_back(84);
     serialB.write(p2);
     
-    if (serialA.wait_available())
-         std::cout << "RX (A): " << convert_packet(serialA.read()) << std::endl;
-    
-    if (serialB.wait_available())
-         std::cout << "RX (B): " << convert_packet(serialB.read()) << std::endl;
-    
-    return 0;
+    return app.exec();
 }

@@ -239,6 +239,7 @@ void Serial::isr_sda_rise()
         {
             rx_buffer.push(rx_packet);
             available_condition.notify_all();
+            emit packet_received(this);
         }
         else if (state == TX)
         {

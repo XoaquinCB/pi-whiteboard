@@ -6,9 +6,13 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+
+#include <QObject>
     
-class Serial
+class Serial : public QObject
 {
+    Q_OBJECT
+
 public:
     /**
      * Datatype representing a packet of data as a list of bytes.
@@ -79,6 +83,12 @@ public:
      * Returns whether the instance has been stopped.
      */
     bool stopped();
+
+signals:
+    /**
+     * Emitted when a packet is received.
+     */
+    void packet_received(Serial *serial);
     
 private:
     // Any access to variables in this class should lock this mutex.
