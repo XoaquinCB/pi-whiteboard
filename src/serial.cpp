@@ -75,7 +75,7 @@ std::size_t Serial::wait_available(long timeout_micros)
 {
     std::lock_guard<std::mutex> lock(mtx);
     
-    if (rx_buffer.size() != 0)
+    if (rx_buffer.size() != 0 || is_stopped)
         return rx_buffer.size();
     
     // Wait for packet to be received:
@@ -93,6 +93,9 @@ void Serial::stop()
     
     // Set flag to tell threads to finish:
     finish = true;
+    
+    // Allow any calls to 'wait_available' to return:
+    available_condition.notify_all();
     
     // Wait for all threads to finish (count == 0):
     stop_condition.wait(mtx, [this]{ return thread_count == 0; });
