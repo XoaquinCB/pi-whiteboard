@@ -51,12 +51,6 @@ public:
     packet peek();
     
     /**
-     * Checks if a packet is valid and puts it on the transmit buffer if it is.
-     * Returns whether the packet is valid.
-     */
-    bool write(packet bytes);
-    
-    /**
      * Returns the number of packets available in the receive buffer.
      */
     std::size_t available();
@@ -83,6 +77,13 @@ public:
      * Returns whether the instance has been stopped.
      */
     bool stopped();
+
+public slots:
+    /**
+     * Checks if a packet is valid and puts it on the transmit buffer if it is.
+     * Returns whether the packet is valid.
+     */
+    bool write(packet bytes);
 
 signals:
     /**
