@@ -11,6 +11,12 @@ void canvas::selectTool(QAction* tool)
     toolType = tool->text();
 }
 
+void canvas::selectColor(QAction* color)
+{
+    qDebug() << color->text();
+    penColor.setNamedColor(color->text());
+}
+
 void canvas::mouseMoveEvent(QMouseEvent *event)
 {
     qDebug() << event->x() << event->y();   // position relative to window
@@ -77,6 +83,8 @@ void canvas::mouseReleaseEvent(QMouseEvent *event)
         emit sendPacket(packets[i]);
     }
     
+    QColor color = penColor;
+    colorList.append(color);
     lines.append(currentLines);
     currentLines.clear();
 
@@ -88,14 +96,18 @@ void canvas::paintEvent(QPaintEvent*)
     QPainter painter;
     painter.begin(this);
     QPen pen;
-    painter.setPen(pen);
     for(int i = 0; i < lines.size(); i++)
     {
+        pen.setColor(colorList[i]);
+        painter.setPen(pen);
         for(int j = 0; j < lines[i].size(); j++)
         {
             painter.drawLine(lines[i][j]);
         }
     }
+    
+    pen.setColor(penColor);
+    painter.setPen(pen);
     for(int i = 0; i < currentLines.size(); i++)
     {
         painter.drawLine(currentLines[i]);
@@ -118,9 +130,6 @@ QList<Serial::packet> canvas::serialize()
     if (toolType == "clear")
     {
         p.push_back(0);
-        p.push_back(0);
-        p.push_back(0);
-        p.push_back(0);
         packets.append(p);
     }
     else if (toolType == "pen" ||
@@ -135,9 +144,9 @@ QList<Serial::packet> canvas::serialize()
                 p = Serial::packet(0);
                 
                 p.push_back(1);
-                p.push_back(0);
-                p.push_back(0);
-                p.push_back(0);
+                p.push_back(penColor.red()   & 0xFF);
+                p.push_back(penColor.green() & 0xFF);
+                p.push_back(penColor.blue()  & 0xFF);
 
                 x = currentLines[i].x1();
                 y = currentLines[i].y1();
@@ -162,9 +171,9 @@ QList<Serial::packet> canvas::serialize()
 
 void canvas::deserialize(Serial::packet p)
 {
-    qDebug() << "here";
-    if (p.size() < 4)
-           return;
+    if (p.size() == 0)
+        return;
+    
     int command = p[0];
     qDebug() << command;
     if (command == 1)
@@ -181,11 +190,13 @@ void canvas::deserialize(Serial::packet p)
             QLine newLine(x1, y1, x2, y2);
             newLines.append(newLine);
         }
+        colorList.append(QColor(p[1], p[2], p[3]));
         lines.append(newLines);
     }
     else if (command == 0)
     {
        qDebug() << "receive client cleared";
+       colorList.clear();
        lines.clear();
     }
     update();
@@ -207,6 +218,7 @@ void canvas::mousePressEvent(QMouseEvent *event)
 {
     if (toolType == "clear")
     {
+        colorList.clear();
         lines.clear();
         update();
     }

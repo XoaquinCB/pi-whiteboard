@@ -13,6 +13,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPen>
+#include <QColor>
 
 #include "serial.hpp"
 
@@ -35,12 +36,15 @@ signals:
 
 public slots:
     void selectTool(QAction* tool);     // updates the selected tool after a toolbar action
+    void selectColor(QAction* color);
     void canvasReceived(QList<QList<QLine>> newCanvas);         // used to receive drawing elements between windows internally
     void packetsReceived(QList<Serial::packet> newPackets);     // used to receive a series of packets between send and receive windows
     void packetReceived(Serial* serial);              // used tp receive a single packet of drawing elements
 
 private:
+    QColor penColor;
     QString toolType;           // option selected on the window toolbar
+    QList<QColor> colorList;
     QList<QList<QLine>> lines;  // list of groups of drawing elements
     QList<QLine> currentLines; // group of lines currently being drawn
     QList<Serial::packet> serialize();  // serialization of current drawing tool into packets
