@@ -43,8 +43,8 @@ private:
     QString toolType;           // option selected on the window toolbar
     QList<QList<QLine>> lines;  // list of groups of drawing elements
     QList<QLine> currentLines; // group of lines currently being drawn
-    QList<Serial::packet> serialize(QList<QLine> lines);    // serialization of drawing elements into bytes
-    void deserialize(Serial::packet p);                     // deserialization of drawing elements from bytes
+    QList<Serial::packet> serialize();  // serialization of current drawing tool into packets
+    void deserialize(Serial::packet p); // deserialization of drawing elements from packet
 
 };
 

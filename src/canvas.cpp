@@ -69,7 +69,7 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
 
 void canvas::mouseReleaseEvent(QMouseEvent *event)
 {
-    QList<Serial::packet> packets = serialize(currentLines);
+    QList<Serial::packet> packets = serialize();
     
     for(int i = 0; i < packets.size(); i++)
     {
@@ -109,62 +109,53 @@ void canvas::canvasReceived(QList<QList<QLine>> newCanvas)
     update();
 }
 
-QList<Serial::packet> canvas::serialize(QList<QLine> group)
+QList<Serial::packet> canvas::serialize()
 {
     QList<Serial::packet> packets;
     Serial::packet p;
     int x, y;
-
-    if (group.size() == 0)
+    
+    if (toolType == "clear")
     {
-        if (toolType == "clear")
-            p.push_back(0);
-        else if (toolType == "pen" |
-                 toolType == "line"|
-                 toolType == "rectangle")
-            p.push_back(1);
-
+        p.push_back(0);
         p.push_back(0);
         p.push_back(0);
         p.push_back(0);
         packets.append(p);
-        qDebug() << "serialized";
-        return packets;
     }
-    for(int i = 0; i < group.size(); i++){
+    else if (toolType == "pen" ||
+             toolType == "line" ||
+             toolType == "rectangle")
+    {
+        for(int i = 0; i < currentLines.size(); i++){
 
-        if( (packets.size() * 4) % 256 == 0 )
-        {
-            packets.append(p);
-            p = Serial::packet(0);
-
-            if (toolType == "clear")
-                p.push_back(0);
-            else if (toolType == "pen" |
-                     toolType == "line"|
-                     toolType == "rectangle")
+            if(p.size() % 256 == 0 )
+            {
+                packets.append(p);
+                p = Serial::packet(0);
+                
                 p.push_back(1);
+                p.push_back(0);
+                p.push_back(0);
+                p.push_back(0);
 
-            p.push_back(0);
-            p.push_back(0);
-            p.push_back(0);
-
-            x = group[0].x1();
-            y = group[0].y1();
+                x = currentLines[i].x1();
+                y = currentLines[i].y1();
+                p.push_back((x >> 0) & 0xFF);
+                p.push_back((x >> 8) & 0xFF);
+                p.push_back((y >> 0) & 0xFF);
+                p.push_back((y >> 8) & 0xFF);
+            }
+            int x = currentLines[i].x2();
+            int y = currentLines[i].y2();
             p.push_back((x >> 0) & 0xFF);
             p.push_back((x >> 8) & 0xFF);
             p.push_back((y >> 0) & 0xFF);
             p.push_back((y >> 8) & 0xFF);
         }
-        int x = group[i].x2();
-        int y = group[i].y2();
-        p.push_back((x >> 0) & 0xFF);
-        p.push_back((x >> 8) & 0xFF);
-        p.push_back((y >> 0) & 0xFF);
-        p.push_back((y >> 8) & 0xFF);
+        packets.append(p);
+        packets.erase(packets.begin());
     }
-    packets.append(p);
-    packets.erase(packets.begin());
     qDebug() << "serialized";
     return packets;
 }
