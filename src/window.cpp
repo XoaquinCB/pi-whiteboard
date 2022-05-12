@@ -9,7 +9,6 @@ Window::Window(QWidget *parent) :
     ui->mainToolBar->addAction("pen");
     ui->mainToolBar->addAction("line");         // draw line button added to tool bar
     ui->mainToolBar->addAction("rectangle");    // replace with icons
-    ui->mainToolBar->addAction("circle");
     ui->mainToolBar->addAction("clear");
 
     //ui->centralWidget->setMouseTracking(true);
