@@ -20,52 +20,40 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
 
     if(toolType == "pen")
     {
-        if(lines.isEmpty()){
-            QList<QLine> newObject;
-            lines.append(newObject);
-        }
-        if((lines.last()).isEmpty())
+        if(currentLines.isEmpty())
             point1 = event->pos();
         else
-            point1 = ((lines.last()).last()).p2();
+            point1 = currentLines.last().p2();
         //qDebug() << "while";
         point2 = event->pos();
         QLine newLine(point1, point2);
-        (lines.last()).append(newLine);
+        currentLines.append(newLine);
         update();
     }
     if(toolType == "line")
     {
-        if(lines.isEmpty()){
-            QList<QLine> newObject;
-            lines.append(newObject);
-        }
-        if((lines.last()).isEmpty()){
+        if(currentLines.isEmpty()){
            QLine line;
-           (lines.last()).append(line);
-            point1 = event->pos();
+           currentLines.append(line);
+           point1 = event->pos();
         }
         else
-            point1 = ((lines.last()).last()).p1();
+            point1 = currentLines.last().p1();
         point2 = event->pos();
         QLine newLine(point1, point2);
-        (lines.last()).replace(0, newLine);
+        currentLines.replace(0, newLine);
         update();
     }
     if(toolType == "rectangle")
     {
-        if(lines.isEmpty()){
-            QList<QLine> newObject;
-            lines.append(newObject);
-        }
-        if((lines.last()).isEmpty()){
+        if(currentLines.isEmpty()){
             QLine line;
             for(int i = 0; i < 4; i++)
-                (lines.last()).append(line);
+                currentLines.append(line);
             point1 = event->pos();
         }
         else
-            point1 = ((lines.last()).first()).p1();
+            point1 = currentLines.first().p1();
         //qDebug() << "while";
         point2 = event->pos();
         QList<QLine> newLines;
@@ -74,27 +62,23 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
         newLines.append(QLine(point2.x(), point2.y(), point2.x(), point1.y()));
         newLines.append(QLine(point2.x(), point1.y(), point1.x(), point1.y()));
         for(int i = 0; i < 4; i++)
-            (lines.last()).replace(i, newLines[i]);
+            currentLines.replace(i, newLines[i]);
         update();
     }
 }
 
 void canvas::mouseReleaseEvent(QMouseEvent *event)
 {
-    QList<QLine> newObject;
-    QList<Serial::packet> packets;
-
-    if(!lines.isEmpty()) // prevents empty list assertion
-        packets = serialize(lines.last());
-    else
-        packets = serialize(newObject);
+    QList<Serial::packet> packets = serialize(currentLines);
+    
     for(int i = 0; i < packets.size(); i++)
     {
         qDebug() << "packetSent";
         emit sendPacket(packets[i]);
     }
-
-    lines.append(newObject);
+    
+    lines.append(currentLines);
+    currentLines.clear();
 
     qDebug() << "mouse release";
 }
@@ -111,6 +95,10 @@ void canvas::paintEvent(QPaintEvent*)
         {
             painter.drawLine(lines[i][j]);
         }
+    }
+    for(int i = 0; i < currentLines.size(); i++)
+    {
+        painter.drawLine(currentLines[i]);
     }
     painter.end();
 }

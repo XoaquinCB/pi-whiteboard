@@ -30,14 +30,12 @@ int main(int argc, char *argv[])
 
     // setup Qt GUI
     QApplication a(argc, argv);
-    Window send;
-    Window receive;
+    Window window;
     Serial serial(0, 1);
-    send.show();
-    receive.show();
+    window.show();
 
-    QObject::connect(send.ui->centralWidget, &canvas::sendPacket, &serial, &Serial::write);
-    QObject::connect(&serial, &Serial::packet_received, receive.ui->centralWidget, &canvas::packetReceived);
+    QObject::connect(window.ui->centralWidget, &canvas::sendPacket, &serial, &Serial::write);
+    QObject::connect(&serial, &Serial::packet_received, window.ui->centralWidget, &canvas::packetReceived);
 
     // starting worker thread(s)
     int rc;
