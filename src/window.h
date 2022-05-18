@@ -21,10 +21,8 @@ class Window : public QMainWindow
     
 public:
     explicit Window(QWidget *parent = 0);
-    //void mouseMoveEvent(QMouseEvent *event);
     ~Window();
     Ui::Window *ui; // includes canvas as main widget in definition
-    //canvas *mainCanvas;
     
 private slots:
 

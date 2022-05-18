@@ -27,19 +27,15 @@ public:
     void mouseReleaseEvent(QMouseEvent *event);
 
 protected:
-    void paintEvent(QPaintEvent *) override;    // updates drawing elements on window
+    void paintEvent(QPaintEvent *) override; // updates drawing elements on window
 
 signals:
-    void canvasChanged(QList<QList<QLine>> changedCanvas);      // signal
-    void sendPackets(QList<Serial::packet> changedPackets);
-    void sendPacket(Serial::packet changedPacket);
+    void sendPacket(Serial::packet changedPacket); // emitted when a new packet is ready to be sent
 
 public slots:
-    void selectTool(QAction* tool);     // updates the selected tool after a toolbar action
-    void selectColor(QAction* color);
-    void canvasReceived(QList<QList<QLine>> newCanvas);         // used to receive drawing elements between windows internally
-    void packetsReceived(QList<Serial::packet> newPackets);     // used to receive a series of packets between send and receive windows
-    void packetReceived(Serial* serial);              // used tp receive a single packet of drawing elements
+    void selectTool(QAction* tool);      // updates the selected tool after a toolbar action
+    void selectColor(QAction* color);    // updates the selected color after a toolbar action
+    void packetReceived(Serial* serial); // used tp receive packets of drawing elements
 
 private:
     struct LineGroup
@@ -55,7 +51,6 @@ private:
     
     QList<Serial::packet> serialize();  // serialization of current drawing tool into packets
     void deserialize(Serial::packet p); // deserialization of drawing elements from packet
-
 };
 
 #endif // CANVAS_H

@@ -1,28 +1,10 @@
 #include "canvas.h"
 
-canvas::canvas(QWidget *parent) : QWidget(parent)
-{
-
-}
-
-void canvas::selectTool(QAction* tool)
-{
-    qDebug() << tool->text();
-    toolType = tool->text();
-}
-
-void canvas::selectColor(QAction* color)
-{
-    qDebug() << color->text();
-    currentLines.color.setNamedColor(color->text());
-}
+canvas::canvas(QWidget *parent) : QWidget(parent) { }
 
 void canvas::mouseMoveEvent(QMouseEvent *event)
 {
-    qDebug() << event->x() << event->y();   // position relative to window
-
-    QPoint point2;
-    QPoint point1;
+    QPoint point1, point2;
 
     if(toolType == "pen")
     {
@@ -30,37 +12,37 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
             point1 = event->pos();
         else
             point1 = currentLines.lines.last().p2();
-        //qDebug() << "while";
         point2 = event->pos();
-        QLine newLine(point1, point2);
-        currentLines.lines.append(newLine);
+        currentLines.lines.append(QLine(point1, point2));
         update();
     }
     if(toolType == "line")
     {
-        if(currentLines.lines.isEmpty()){
-           QLine line;
-           currentLines.lines.append(line);
+        if(currentLines.lines.isEmpty())
+        {
+           currentLines.lines.append(QLine());
            point1 = event->pos();
         }
         else
+        {
             point1 = currentLines.lines.last().p1();
+        }
         point2 = event->pos();
-        QLine newLine(point1, point2);
-        currentLines.lines.replace(0, newLine);
+        currentLines.lines.replace(0, QLine(point1, point2));
         update();
     }
     if(toolType == "rectangle")
     {
-        if(currentLines.lines.isEmpty()){
-            QLine line;
+        if(currentLines.lines.isEmpty())
+        {
             for(int i = 0; i < 4; i++)
-                currentLines.lines.append(line);
+                currentLines.lines.append(QLine());
             point1 = event->pos();
         }
         else
+        {
             point1 = currentLines.lines.first().p1();
-        //qDebug() << "while";
+        }
         point2 = event->pos();
         QList<QLine> newLines;
         newLines.append(QLine(point1.x(), point1.y(), point1.x(), point2.y()));
@@ -73,22 +55,24 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
     }
 }
 
+void canvas::mousePressEvent(QMouseEvent *event)
+{
+    if (toolType == "clear")
+    {
+        lines.clear();
+        update();
+    }
+}
+
 void canvas::mouseReleaseEvent(QMouseEvent *event)
 {
     QList<Serial::packet> packets = serialize();
     
     for(int i = 0; i < packets.size(); i++)
-    {
-        qDebug() << "packetSent";
         emit sendPacket(packets[i]);
-    }
     
-    // QColor color = penColor;
-    // colorList.append(color);
     lines.append(currentLines);
     currentLines.lines.clear();
-
-    qDebug() << "mouse release";
 }
 
 void canvas::paintEvent(QPaintEvent*)
@@ -115,10 +99,20 @@ void canvas::paintEvent(QPaintEvent*)
     painter.end();
 }
 
-void canvas::canvasReceived(QList<QList<QLine>> newCanvas)
+void canvas::selectTool(QAction* tool)
 {
-    // lines = newCanvas;
-    update();
+    toolType = tool->text();
+}
+
+void canvas::selectColor(QAction* color)
+{
+    currentLines.color.setNamedColor(color->text());
+}
+
+void canvas::packetReceived(Serial* serial)
+{
+    while(serial->available())
+        deserialize(serial->read());
 }
 
 QList<Serial::packet> canvas::serialize()
@@ -165,7 +159,6 @@ QList<Serial::packet> canvas::serialize()
         packets.append(p);
         packets.erase(packets.begin());
     }
-    qDebug() << "serialized";
     return packets;
 }
 
@@ -175,13 +168,12 @@ void canvas::deserialize(Serial::packet p)
         return;
     
     int command = p[0];
-    qDebug() << command;
     if (command == 1)
     {
         if(p.size() % 4 != 0)
            return;
         LineGroup newGroup;
-        for(int i = 4; i < p.size() - 4; i += 4)
+        for(unsigned int i = 4; i < p.size() - 4; i += 4)
         {
             int x1 = (int16_t) ((p[i+1] << 8) | p[i+0]);
             int y1 = (int16_t) ((p[i+3] << 8) | p[i+2]);
@@ -195,29 +187,7 @@ void canvas::deserialize(Serial::packet p)
     }
     else if (command == 0)
     {
-       qDebug() << "receive client cleared";
        lines.clear();
     }
     update();
-}
-
-void canvas::packetsReceived(QList<Serial::packet> newPackets)
-{
-    for(int i = 0; i < newPackets.size(); i++)
-        deserialize(newPackets[i]);
-}
-
-void canvas::packetReceived(Serial* serial)
-{
-    while(serial->available())
-        deserialize(serial->read());
-}
-
-void canvas::mousePressEvent(QMouseEvent *event)
-{
-    if (toolType == "clear")
-    {
-        lines.clear();
-        update();
-    }
 }

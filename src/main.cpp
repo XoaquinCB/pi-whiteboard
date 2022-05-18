@@ -1,24 +1,14 @@
 #include <QApplication>
-#include <QDebug>
 #include <QObject>
-
-#include <wiringPi.h>
-
-#include "serial.hpp"
-#include <QList>
 
 #include <iostream>
 
+#include "serial.hpp"
 #include "window.h"
 #include "ui_window.h"
 
 int main(int argc, char *argv[])
 {
-    // setup GPIO interface - uncomment when needed
-    // needs to run with root via sudo in terminal.
-    // wiringPiSetup();
-    // pinMode (0, OUTPUT);
-    
     int pin_scl = 0;
     int pin_sda = 1;
     
@@ -48,11 +38,5 @@ int main(int argc, char *argv[])
     QObject::connect(window.ui->centralWidget, &canvas::sendPacket, &serial, &Serial::write);
     QObject::connect(&serial, &Serial::packet_received, window.ui->centralWidget, &canvas::packetReceived);
 
-    // start window event loop
-    qDebug() << "Starting event loop...";
-    int ret = a.exec();
-    qDebug() << "Event loop stopped.";
-
-    // exit
-    return ret;
+    return a.exec();
 }
