@@ -42,11 +42,17 @@ public slots:
     void packetReceived(Serial* serial);              // used tp receive a single packet of drawing elements
 
 private:
-    QColor penColor;
-    QString toolType;           // option selected on the window toolbar
-    QList<QColor> colorList;
-    QList<QList<QLine>> lines;  // list of groups of drawing elements
-    QList<QLine> currentLines; // group of lines currently being drawn
+    struct LineGroup
+    {
+        QColor color;
+        QBrush brush;
+        QList<QLine> lines;
+    };
+    
+    QList<LineGroup> lines; // list of groups of drawing elements
+    LineGroup currentLines; // group of lines currently being drawn
+    QString toolType;       // option selected on the window toolbar
+    
     QList<Serial::packet> serialize();  // serialization of current drawing tool into packets
     void deserialize(Serial::packet p); // deserialization of drawing elements from packet
 

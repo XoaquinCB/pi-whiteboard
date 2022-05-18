@@ -14,7 +14,7 @@ void canvas::selectTool(QAction* tool)
 void canvas::selectColor(QAction* color)
 {
     qDebug() << color->text();
-    penColor.setNamedColor(color->text());
+    currentLines.color.setNamedColor(color->text());
 }
 
 void canvas::mouseMoveEvent(QMouseEvent *event)
@@ -26,40 +26,40 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
 
     if(toolType == "pen")
     {
-        if(currentLines.isEmpty())
+        if(currentLines.lines.isEmpty())
             point1 = event->pos();
         else
-            point1 = currentLines.last().p2();
+            point1 = currentLines.lines.last().p2();
         //qDebug() << "while";
         point2 = event->pos();
         QLine newLine(point1, point2);
-        currentLines.append(newLine);
+        currentLines.lines.append(newLine);
         update();
     }
     if(toolType == "line")
     {
-        if(currentLines.isEmpty()){
+        if(currentLines.lines.isEmpty()){
            QLine line;
-           currentLines.append(line);
+           currentLines.lines.append(line);
            point1 = event->pos();
         }
         else
-            point1 = currentLines.last().p1();
+            point1 = currentLines.lines.last().p1();
         point2 = event->pos();
         QLine newLine(point1, point2);
-        currentLines.replace(0, newLine);
+        currentLines.lines.replace(0, newLine);
         update();
     }
     if(toolType == "rectangle")
     {
-        if(currentLines.isEmpty()){
+        if(currentLines.lines.isEmpty()){
             QLine line;
             for(int i = 0; i < 4; i++)
-                currentLines.append(line);
+                currentLines.lines.append(line);
             point1 = event->pos();
         }
         else
-            point1 = currentLines.first().p1();
+            point1 = currentLines.lines.first().p1();
         //qDebug() << "while";
         point2 = event->pos();
         QList<QLine> newLines;
@@ -68,7 +68,7 @@ void canvas::mouseMoveEvent(QMouseEvent *event)
         newLines.append(QLine(point2.x(), point2.y(), point2.x(), point1.y()));
         newLines.append(QLine(point2.x(), point1.y(), point1.x(), point1.y()));
         for(int i = 0; i < 4; i++)
-            currentLines.replace(i, newLines[i]);
+            currentLines.lines.replace(i, newLines[i]);
         update();
     }
 }
@@ -83,10 +83,10 @@ void canvas::mouseReleaseEvent(QMouseEvent *event)
         emit sendPacket(packets[i]);
     }
     
-    QColor color = penColor;
-    colorList.append(color);
+    // QColor color = penColor;
+    // colorList.append(color);
     lines.append(currentLines);
-    currentLines.clear();
+    currentLines.lines.clear();
 
     qDebug() << "mouse release";
 }
@@ -98,26 +98,26 @@ void canvas::paintEvent(QPaintEvent*)
     QPen pen;
     for(int i = 0; i < lines.size(); i++)
     {
-        pen.setColor(colorList[i]);
+        pen.setColor(lines[i].color);
         painter.setPen(pen);
-        for(int j = 0; j < lines[i].size(); j++)
+        for(int j = 0; j < lines[i].lines.size(); j++)
         {
-            painter.drawLine(lines[i][j]);
+            painter.drawLine(lines[i].lines[j]);
         }
     }
     
-    pen.setColor(penColor);
+    pen.setColor(currentLines.color);
     painter.setPen(pen);
-    for(int i = 0; i < currentLines.size(); i++)
+    for(int i = 0; i < currentLines.lines.size(); i++)
     {
-        painter.drawLine(currentLines[i]);
+        painter.drawLine(currentLines.lines[i]);
     }
     painter.end();
 }
 
 void canvas::canvasReceived(QList<QList<QLine>> newCanvas)
 {
-    lines = newCanvas;
+    // lines = newCanvas;
     update();
 }
 
@@ -136,7 +136,7 @@ QList<Serial::packet> canvas::serialize()
              toolType == "line" ||
              toolType == "rectangle")
     {
-        for(int i = 0; i < currentLines.size(); i++){
+        for(int i = 0; i < currentLines.lines.size(); i++){
 
             if(p.size() % 256 == 0 )
             {
@@ -144,19 +144,19 @@ QList<Serial::packet> canvas::serialize()
                 p = Serial::packet(0);
                 
                 p.push_back(1);
-                p.push_back(penColor.red()   & 0xFF);
-                p.push_back(penColor.green() & 0xFF);
-                p.push_back(penColor.blue()  & 0xFF);
+                p.push_back(currentLines.color.red()   & 0xFF);
+                p.push_back(currentLines.color.green() & 0xFF);
+                p.push_back(currentLines.color.blue()  & 0xFF);
 
-                x = currentLines[i].x1();
-                y = currentLines[i].y1();
+                x = currentLines.lines[i].x1();
+                y = currentLines.lines[i].y1();
                 p.push_back((x >> 0) & 0xFF);
                 p.push_back((x >> 8) & 0xFF);
                 p.push_back((y >> 0) & 0xFF);
                 p.push_back((y >> 8) & 0xFF);
             }
-            int x = currentLines[i].x2();
-            int y = currentLines[i].y2();
+            int x = currentLines.lines[i].x2();
+            int y = currentLines.lines[i].y2();
             p.push_back((x >> 0) & 0xFF);
             p.push_back((x >> 8) & 0xFF);
             p.push_back((y >> 0) & 0xFF);
@@ -180,7 +180,7 @@ void canvas::deserialize(Serial::packet p)
     {
         if(p.size() % 4 != 0)
            return;
-        QList<QLine> newLines;
+        LineGroup newGroup;
         for(int i = 4; i < p.size() - 4; i += 4)
         {
             int x1 = (int16_t) ((p[i+1] << 8) | p[i+0]);
@@ -188,15 +188,14 @@ void canvas::deserialize(Serial::packet p)
             int x2 = (int16_t) ((p[i+5] << 8) | p[i+4]);
             int y2 = (int16_t) ((p[i+7] << 8) | p[i+6]);
             QLine newLine(x1, y1, x2, y2);
-            newLines.append(newLine);
+            newGroup.lines.append(newLine);
         }
-        colorList.append(QColor(p[1], p[2], p[3]));
-        lines.append(newLines);
+        newGroup.color = QColor(p[1], p[2], p[3]);
+        lines.append(newGroup);
     }
     else if (command == 0)
     {
        qDebug() << "receive client cleared";
-       colorList.clear();
        lines.clear();
     }
     update();
@@ -218,7 +217,6 @@ void canvas::mousePressEvent(QMouseEvent *event)
 {
     if (toolType == "clear")
     {
-        colorList.clear();
         lines.clear();
         update();
     }
